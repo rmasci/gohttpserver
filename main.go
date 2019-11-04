@@ -163,7 +163,7 @@ func main() {
 	if ss.PlistProxy != "" {
 		log.Printf("plistproxy: %s", strconv.Quote(ss.PlistProxy))
 	}
-	
+
 	var hdlr http.Handler = ss
 
 	hdlr = accesslog.NewLoggingHandler(hdlr, logger)
@@ -194,6 +194,7 @@ func main() {
 
 	http.Handle("/", hdlr)
 	http.Handle("/-/assets/", http.StripPrefix("/-/assets/", http.FileServer(Assets)))
+	http.HandleFunc("/xjconverter", xjconverter)
 	http.HandleFunc("/-/sysinfo", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		data, _ := json.Marshal(map[string]interface{}{
@@ -201,7 +202,7 @@ func main() {
 		})
 		w.Write(data)
 	})
-
+	//http.HandleFunc("/-/xjconverter", xjconverter)
 	if gcfg.Addr == "" {
 		gcfg.Addr = fmt.Sprintf(":%d", gcfg.Port)
 	}
@@ -219,3 +220,4 @@ func main() {
 	}
 	log.Fatal(err)
 }
+

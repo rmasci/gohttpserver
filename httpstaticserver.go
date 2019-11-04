@@ -288,8 +288,8 @@ func parseApkInfo(path string) (ai *ApkInfo) {
 	ai = &ApkInfo{}
 	ai.MainActivity, _ = apkf.MainActivity()
 	ai.PackageName = apkf.PackageName()
-	ai.Version.Code = apkf.Manifest().VersionCode
-	ai.Version.Name = apkf.Manifest().VersionName
+	//ai.Version.Code = apkf.Manifest().VersionCode
+	//ai.Version.Name = apkf.Manifest().VersionName
 	return
 }
 
@@ -365,7 +365,7 @@ func (s *HTTPStaticServer) hPlist(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-
+ 
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
