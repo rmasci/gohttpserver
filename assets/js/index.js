@@ -188,7 +188,18 @@ var vm = new Vue({
     genDownloadURL: function (f) {
       var search = location.search;
       var sep = search == "" ? "?" : "&"
-      return location.origin + "/" + f.path + location.search + sep + "download=true";
+      var dwnldUrl=location.origin + "/" + f.path + location.search
+      //return location.origin + "/" + f.path + location.search + sep + "download=true";
+      return dwnldUrl ;
+    },
+    genDownloadURLWget: function (f) {
+      var search = location.search;
+      var sep = search == "" ? "?" : "&"
+      var dwnldUrl=location.origin + "/" + f.path + location.search
+      var parts =  dwnldUrl.split('/')
+      var dwnldFile=parts.pop()
+      //return location.origin + "/" + f.path + location.search + sep + "download=true";
+      return "wget --output-document=" + dwnldFile + " " + dwnldUrl ;
     },
     shouldHaveQrcode: function (name) {
       return ['apk', 'ipa'].indexOf(getExtention(name)) !== -1;
