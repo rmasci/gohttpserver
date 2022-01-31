@@ -193,6 +193,15 @@ var vm = new Vue({
       var sep = search == "" ? "?" : "&"
       return location.origin + this.getEncodePath(f) + location.search + sep + "download=true";
     },
+    genDownloadURLWget: function (f) {
+      var search = location.search;
+      var sep = search == "" ? "?" : "&"
+      var dwnldUrl = location.origin + "/" + f.path + location.search
+      var parts = dwnldUrl.split('/')
+      var dwnldFile = parts.pop()
+      //return location.origin + "/" + f.path + location.search + sep + "download=true";
+      return "wget --output-document=" + dwnldFile + " " + dwnldUrl;
+    },
     shouldHaveQrcode: function (name) {
       return ['apk', 'ipa'].indexOf(getExtention(name)) !== -1;
     },
@@ -275,7 +284,7 @@ var vm = new Vue({
       if (!name) {
         return
       }
-      if(!checkPathNameLegal(name)) {
+      if (!checkPathNameLegal(name)) {
         alert("Name should not contains any of \\/:*<>|")
         return
       }
@@ -337,23 +346,23 @@ var vm = new Vue({
       }
       var that = this;
       $.getJSON(pathJoin(['/-/info', location.pathname]))
-          .then(function (res) {
-            console.log(res);
-            that.preview.filename = res.name;
-            that.preview.filesize = res.size;
-            return $.ajax({
-              url: '/' + res.path,
-              dataType: 'text',
-            });
-          })
-          .then(function (res) {
-            console.log(res)
-            that.preview.contentHTML = '<pre>' + res + '</pre>';
-            console.log("Finally")
-          })
-          .done(function (res) {
-            console.log("done", res)
+        .then(function (res) {
+          console.log(res);
+          that.preview.filename = res.name;
+          that.preview.filesize = res.size;
+          return $.ajax({
+            url: '/' + res.path,
+            dataType: 'text',
           });
+        })
+        .then(function (res) {
+          console.log(res)
+          that.preview.contentHTML = '<pre>' + res + '</pre>';
+          console.log("Finally")
+        })
+        .done(function (res) {
+          console.log("done", res)
+        });
     },
     loadAll: function () {
       // TODO: move loadFileList here
@@ -444,10 +453,10 @@ $(function () {
     console.info('Text:', e.text);
     console.info('Trigger:', e.trigger);
     $(e.trigger)
-        .tooltip('show')
-        .mouseleave(function () {
-          $(this).tooltip('hide');
-        })
+      .tooltip('show')
+      .mouseleave(function () {
+        $(this).tooltip('hide');
+      })
 
     e.clearSelection();
   });
