@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Markdown Editor</title>
+  <link rel="stylesheet" type="text/css" href="/-/assets/vditor/dist/index.css">
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f5f5f5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* Prevent Vditor sticky toolbar from hiding behind our fixed header */
+    .vditor-toolbar--pin {
+      top: 50px !important;
+    }
+
+    .editor-toolbar-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px;
+      background: #333;
+      color: #fff;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      height: 50px;
+    }
+
+    .editor-toolbar-top .file-name {
+      font-size: 14px;
+      font-weight: bold;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 50%;
+    }
+
+    .editor-toolbar-top .btn {
+      display: inline-block;
+      padding: 4px 12px;
+      margin-left: 6px;
+      font-size: 13px;
+      font-weight: normal;
+      cursor: pointer;
+      border: 1px solid transparent;
+      border-radius: 3px;
+      color: #fff;
+      text-decoration: none;
+    }
+
+    .editor-toolbar-top .btn-success {
+      background-color: #5cb85c;
+      border-color: #4cae4c;
+    }
+
+    .editor-toolbar-top .btn-success:hover {
+      background-color: #449d44;
+    }
+
+    .editor-toolbar-top .btn-success:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+
+    .editor-toolbar-top .btn-default {
+      background-color: #5a6268;
+      border-color: #4e555b;
+    }
+
+    .editor-toolbar-top .btn-default:hover {
+      background-color: #4e555b;
+    }
+
+    .editor-container {
+      margin-top: 50px;
+      height: calc(100vh - 50px);
+    }
+
+    #vditor {
+      height: 100%;
+    }
+
+    .save-status {
+      font-size: 12px;
+      margin-right: 12px;
+      opacity: 0.8;
+    }
+
+    .save-status.saving {
+      color: #ffc107;
+    }
+
+    .save-status.saved {
+      color: #5cb85c;
+    }
+
+    .save-status.error {
+      color: #d9534f;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="editor-toolbar-top">
+    <div class="file-name" id="file-name">Loading...</div>
+    <div style="display: flex; align-items: center;">
+      <span class="save-status" id="save-status"></span>
+      <div class="btn-group-actions">
+        <button class="btn btn-success" id="btn-save" onclick="saveFile()" disabled>
+          &#128190; Save
+        </button>
+        <button class="btn btn-default" id="btn-back" onclick="goBack()">
+          &#8592; Back
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="editor-container">
+    <div id="vditor"></div>
+  </div>
+
+  <script src="/-/assets/vditor/dist/index.min.js"></script>
+  <script>
+    var filePath = '';
+    var vditor = null;
+    var originalContent = '';
+    var hasUnsavedChanges = false;
+
+    function getQueryParam(name) {
+      var urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(name);
+    }
+
+    function setStatus(text, cls) {
+      var el = document.getElementById('save-status');
+      el.textContent = text;
+      el.className = 'save-status ' + (cls || '');
+    }
+
+    function goBack() {
+      if (hasUnsavedChanges) {
+        if (!confirm('You have unsaved changes. Discard and go back?')) {
+          return;
+        }
+      }
+      var parts = filePath.split('/');
+      parts.pop();
+      var parentDir = parts.join('/') || '/';
+      window.location.href = parentDir;
+    }
+
+    function saveFile() {
+      if (!vditor) return;
+      var content = vditor.getValue();
+      setStatus('Saving...', 'saving');
+      document.getElementById('btn-save').disabled = true;
+
+      var xhr = new XMLHttpRequest();
+      xhr.open('PUT', filePath, true);
+      xhr.setRequestHeader('Content-Type', 'text/markdown; charset=utf-8');
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4) {
+          if (xhr.status === 200) {
+            originalContent = content;
+            hasUnsavedChanges = false;
+            setStatus('Saved!', 'saved');
+            setTimeout(function () {
+              setStatus('', '');
+            }, 3000);
+          } else {
+            var errMsg = 'Error saving: ' + xhr.status;
+            try {
+              var resp = JSON.parse(xhr.responseText);
+              if (resp.error) errMsg = resp.error;
+            } catch (e) {
+              if (xhr.responseText) errMsg = xhr.responseText;
+            }
+            setStatus(errMsg, 'error');
+          }
+          document.getElementById('btn-save').disabled = false;
+        }
+      };
+      xhr.send(content);
+    }
+
+    // Keyboard shortcut: Ctrl+S / Cmd+S
+    document.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveFile();
+      }
+    });
+
+    // Init
+    filePath = getQueryParam('file');
+    if (!filePath) {
+      document.getElementById('file-name').textContent = 'Error: No file specified';
+    } else {
+      var displayName = decodeURIComponent(filePath.split('/').pop());
+      document.getElementById('file-name').textContent = displayName;
+      document.title = displayName + ' - Markdown Editor';
+
+      // Fetch file content
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', filePath, true);
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4) {
+          if (xhr.status === 200) {
+            originalContent = xhr.responseText;
+            initEditor(originalContent);
+          } else {
+            document.getElementById('file-name').textContent = 'Error loading file: ' + xhr.status;
+          }
+        }
+      };
+      xhr.send();
+    }
+
+    function initEditor(content) {
+      vditor = new Vditor('vditor', {
+        value: content,
+        mode: 'wysiwyg',
+        theme: 'classic',
+        lang: 'en_US',
+        height: '100%',
+        cache: {
+          enable: false,
+        },
+        cdn: window.location.origin + '/-/assets/vditor',
+        toolbar: [
+          'headings', 'bold', 'italic', 'strike', '|',
+          'list', 'ordered-list', 'check', 'outdent', 'indent', '|',
+          'quote', 'line', 'code', 'inline-code', '|',
+          'link', 'table', '|',
+          'undo', 'redo', '|',
+          'edit-mode', 'fullscreen', 'outline',
+          {
+            name: 'save-btn',
+            tip: 'Save (Ctrl+S)',
+            icon: '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>',
+            click: function () {
+              saveFile();
+            }
+          }
+        ],
+        input: function (value) {
+          if (value !== originalContent) {
+            hasUnsavedChanges = true;
+          } else {
+            hasUnsavedChanges = false;
+          }
+        },
+        after: function () {
+          document.getElementById('btn-save').disabled = false;
+        }
+      });
+    }
+
+    // Warn on page leave with unsaved changes
+    window.addEventListener('beforeunload', function (e) {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+  </script>
+</body>
+
+</html>

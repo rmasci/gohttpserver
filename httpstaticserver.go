@@ -101,6 +101,7 @@ func NewHTTPStaticServer(root string) *HTTPStaticServer {
 
 	m.HandleFunc("/{path:.*}", s.hIndex).Methods("GET", "HEAD")
 	m.HandleFunc("/{path:.*}", s.hUploadOrMkdir).Methods("POST")
+	m.HandleFunc("/{path:.*}", s.hSaveFile).Methods("PUT")
 	m.HandleFunc("/{path:.*}", s.hDelete).Methods("DELETE")
 	return s
 }
@@ -185,6 +186,55 @@ func (s *HTTPStaticServer) hDelete(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	w.Write([]byte("Success"))
+}
+
+func (s *HTTPStaticServer) hSaveFile(w http.ResponseWriter, req *http.Request) {
+	path := mux.Vars(req)["path"]
+	realPath := s.getRealPath(req)
+
+	// Only allow saving markdown files
+	if filepath.Ext(realPath) != ".md" {
+		http.Error(w, "Only markdown (.md) files can be saved", http.StatusBadRequest)
+		return
+	}
+
+	// Check upload permission (upload permission = edit permission)
+	auth := s.readAccessConf(realPath)
+	if !auth.canUpload(req) {
+		http.Error(w, "Save forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Verify the file already exists (no creating new files via PUT)
+	if !isFile(realPath) {
+		http.Error(w, "File not found: "+path, http.StatusNotFound)
+		return
+	}
+
+	// Read the request body
+	body, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		log.Printf("Error reading request body: %v", err)
+		http.Error(w, "Error reading request body", http.StatusInternalServerError)
+		return
+	}
+	defer req.Body.Close()
+
+	// Write the content back to disk
+	err = ioutil.WriteFile(realPath, body, 0644)
+	if err != nil {
+		log.Printf("Error writing file %s: %v", realPath, err)
+		http.Error(w, "Error saving file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Saved markdown file: %s (%d bytes)", realPath, len(body))
+	w.Header().Set("Content-Type", "application/json;charset=utf-8")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"path":    path,
+		"size":    len(body),
+	})
 }
 
 func (s *HTTPStaticServer) hUploadOrMkdir(w http.ResponseWriter, req *http.Request) {

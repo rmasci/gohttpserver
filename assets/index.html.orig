@@ -263,7 +263,7 @@
   <script>
     window.URL_PFEFIX = "[[.Prefix]]"
   </script>
-  <script src="[[.Prefix]]/-/assets/js/jquery-3.1.0.min.js"></script>
+  <script src="[[.Prefix]]/-/assets/js/jquery-3.7.1.min.js"></script>
   <script src="[[.Prefix]]/-/assets/js/jquery.qrcode.js"></script>
   <script src="[[.Prefix]]/-/assets/js/jquery.scrollUp.min.js"></script>
   <script src="[[.Prefix]]/-/assets/js/qrcode.js"></script>

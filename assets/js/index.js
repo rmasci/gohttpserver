@@ -249,6 +249,11 @@ var vm = new Vue({
       var reqPath = pathJoin([location.pathname, encodeURIComponent(f.name)]);
       // TODO: fix here tomorrow
       if (f.type == "file") {
+        if (getExtention(f.name) === "md") {
+          e.preventDefault();
+          window.location.href = window.URL_PFEFIX + "/-/assets/markdown-editor.html?file=" + encodeURIComponent(reqPath);
+          return;
+        }
         window.location.href = reqPath;
         return;
       }

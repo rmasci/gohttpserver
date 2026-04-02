@@ -1,0 +1,15 @@
+[Unit]
+Description=GoHTTPServer - Bespinwerks File Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/gohttpserver -r /var/www/html/ --port=48000 --delete --upload --xheaders --title=Bespinwerks --cert /etc/ssl/chatbot/bespinwerks.web.att.com.crt --key /etc/ssl/chatbot/bespinwerks.web.att.com.key
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+User=root
+
+[Install]
+WantedBy=multi-user.target

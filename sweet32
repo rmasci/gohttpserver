@@ -1,0 +1,32 @@
+package main
+
+import (
+	"crypto/tls"
+	"fmt"
+	"net/http"
+)
+
+func main() {
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				MinVersion: tls.VersionTLS12,
+				CipherSuites: []uint16{
+					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+					// Add other secure cipher suites as needed.
+				},
+			},
+		},
+	}
+
+	resp, err := client.Get("https://example.com")
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Process the response...
+}
+

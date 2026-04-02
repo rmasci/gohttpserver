@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -22,6 +24,7 @@ import (
 	"github.com/goji/httpauth"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/spf13/pflag"
 )
 
 type Configure struct {
@@ -42,6 +45,8 @@ type Configure struct {
 	Title           string   `yaml:"title"`
 	Debug           bool     `yaml:"debug"`
 	GoogleTrackerID string   `yaml:"google-tracker-id"`
+	PHPDir          string   `yaml:"phpdir"`
+	PHPUri          string   `yaml:"phpuri"`
 	Auth            struct {
 		Type   string `yaml:"type"` // openid|http|github
 		OpenID string `yaml:"openid"`
@@ -100,29 +105,28 @@ func parseFlags() error {
 	gcfg.GoogleTrackerID = "UA-81205425-2"
 	gcfg.Title = "Go HTTP File Server"
 
-	kingpin.HelpFlag.Short('h')
-	kingpin.Version(versionMessage())
-	kingpin.Flag("conf", "config file path, yaml format").FileVar(&gcfg.Conf)
-	kingpin.Flag("root", "root directory, default ./").Short('r').StringVar(&gcfg.Root)
-	kingpin.Flag("prefix", "url prefix, eg /foo").StringVar(&gcfg.Prefix)
-	kingpin.Flag("port", "listen port, default 8000").IntVar(&gcfg.Port)
-	kingpin.Flag("addr", "listen address, eg 127.0.0.1:8000").Short('a').StringVar(&gcfg.Addr)
-	kingpin.Flag("cert", "tls cert.pem path").StringVar(&gcfg.Cert)
-	kingpin.Flag("key", "tls key.pem path").StringVar(&gcfg.Key)
-	kingpin.Flag("auth-type", "Auth type <http|openid>").StringVar(&gcfg.Auth.Type)
-	kingpin.Flag("auth-http", "HTTP basic auth (ex: user:pass)").StringVar(&gcfg.Auth.HTTP)
-	kingpin.Flag("auth-openid", "OpenID auth identity url").StringVar(&gcfg.Auth.OpenID)
-	kingpin.Flag("theme", "web theme, one of <black|green>").StringVar(&gcfg.Theme)
-	kingpin.Flag("upload", "enable upload support").BoolVar(&gcfg.Upload)
-	kingpin.Flag("delete", "enable delete support").BoolVar(&gcfg.Delete)
-	kingpin.Flag("xheaders", "used when behide nginx").BoolVar(&gcfg.XHeaders)
-	kingpin.Flag("cors", "enable cross-site HTTP request").BoolVar(&gcfg.Cors)
-	kingpin.Flag("debug", "enable debug mode").BoolVar(&gcfg.Debug)
-	kingpin.Flag("plistproxy", "plist proxy when server is not https").Short('p').StringVar(&gcfg.PlistProxy)
-	kingpin.Flag("title", "server title").StringVar(&gcfg.Title)
-	kingpin.Flag("google-tracker-id", "set to empty to disable it").StringVar(&gcfg.GoogleTrackerID)
+	pflag.StringVarP(&gcfg.Root, "root", "r", "./", "root directory")
+	pflag.StringVar(&gcfg.Prefix, "prefix", "", "url prefix, eg /foo")
+	pflag.IntVar(&gcfg.Port, "port", 8000, "listen port")
+	pflag.StringVarP(&gcfg.Addr, "addr", "a", "", "listen address, eg 127.0.0.1:8000")
+	pflag.StringVar(&gcfg.Cert, "cert", "", "tls cert.pem path")
+	pflag.StringVar(&gcfg.Key, "key", "", "tls key.pem path")
+	pflag.StringVar(&gcfg.Auth.Type, "auth-type", "", "Auth type <http|openid>")
+	pflag.StringVar(&gcfg.Auth.HTTP, "auth-http", "", "HTTP basic auth (ex: user:pass)")
+	pflag.StringVar(&gcfg.Auth.OpenID, "auth-openid", "", "OpenID auth identity url")
+	pflag.StringVar(&gcfg.Theme, "theme", "black", "web theme, one of <black|green>")
+	pflag.BoolVar(&gcfg.Upload, "upload", false, "enable upload support")
+	pflag.BoolVar(&gcfg.Delete, "delete", false, "enable delete support")
+	pflag.BoolVar(&gcfg.XHeaders, "xheaders", false, "used when behide nginx")
+	pflag.StringVar(&gcfg.PHPDir, "phpdir", "", "php-cgi directory")
+	pflag.StringVar(&gcfg.PHPUri, "phpuri", "", "php-cgi uri")
+	pflag.BoolVar(&gcfg.Cors, "cors", false, "enable cross-site HTTP request")
+	pflag.BoolVar(&gcfg.Debug, "debug", false, "enable debug mode")
+	pflag.StringVarP(&gcfg.PlistProxy, "plistproxy", "p", "", "plist proxy when server is not https")
+	pflag.StringVar(&gcfg.Title, "title", "Go HTTP File Server", "server title")
+	pflag.StringVar(&gcfg.GoogleTrackerID, "google-tracker-id", "UA-81205425-2", "set to empty to disable it")
 
-	kingpin.Parse() // first parse conf
+	pflag.Parse()
 
 	if gcfg.Conf != nil {
 		defer func() {
@@ -233,7 +237,7 @@ func main() {
 		w.Write(data)
 	})
 	router.PathPrefix("/").Handler(hdlr)
-
+	router.HandleFunc(gcfg.PHPUri, runPHP)
 	if gcfg.Addr == "" {
 		gcfg.Addr = fmt.Sprintf(":%d", gcfg.Port)
 	}
@@ -246,13 +250,51 @@ func main() {
 	srv := &http.Server{
 		Handler: mainRouter,
 		Addr:    gcfg.Addr,
+		TLSConfig: &tls.Config{
+			CurvePreferences: []tls.CurveID{
+				tls.CurveP256,
+				tls.X25519,
+			},
+			MinVersion: tls.VersionTLS13,
+			CipherSuites: []uint16{
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
+				tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+				tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+				tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_RSA_WITH_AES_128_CBC_SHA256,
+				tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+				tls.TLS_RSA_WITH_AES_128_CBC_SHA,
+			},
+		},
 	}
 
 	var err error
 	if gcfg.Key != "" && gcfg.Cert != "" {
 		err = srv.ListenAndServeTLS(gcfg.Cert, gcfg.Key)
 	} else {
-		err = srv.ListenAndServe()
+		fmt.Println("Will not run without TLS - kind of a standard around here.")
 	}
 	log.Fatal(err)
+}
+
+func runPHP(w http.ResponseWriter, r *http.Request) {
+	if gcfg.PHPDir == "" {
+		http.Error(w, "phpdir not set", http.StatusInternalServerError)
+		return
+	}
+	if gcfg.PHPUri == "" {
+		http.Error(w, "phpuri not set", http.StatusInternalServerError)
+		return
+	}
+	// Strip the PHPUri from the request URI
+	scriptName := strings.TrimPrefix(r.URL.Path, gcfg.PHPUri)
+
+	// Join the PHPDir and the script name to get the path of the PHP script
+	scriptPath := filepath.Join(gcfg.PHPDir, scriptName)
+	// TODO: finish PHP handler implementation
+	_ = scriptPath
 }
